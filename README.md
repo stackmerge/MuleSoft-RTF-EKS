@@ -32,12 +32,13 @@ The guide covers:
 12. [Apply Mule License](#apply-mule-license)
 13. [Associate Runtime Fabric with Anypoint Environment](#associate-runtime-fabric-with-anypoint-environment)
 14. [Configure Runtime Fabric Ingress Template](#configure-runtime-fabric-ingress-template)
-15. [Validation Checklist](#validation-checklist)
-16. [Common Troubleshooting](#common-troubleshooting)
-17. [Uninstall Runtime Fabric and Delete EKS Cluster](#uninstall-runtime-fabric-and-delete-eks-cluster)
-18. [Production Hardening Recommendations](#production-hardening-recommendations)
-19. [Repository Structure Recommendation](#repository-structure-recommendation)
-20. [References](#references)
+15. [Generate and Apply Ingress Template Using Script](#generate-and-apply-ingress-template-using-script)
+16. [Validation Checklist](#validation-checklist)
+17. [Common Troubleshooting](#common-troubleshooting)
+18. [Uninstall Runtime Fabric and Delete EKS Cluster](#uninstall-runtime-fabric-and-delete-eks-cluster)
+19. [Production Hardening Recommendations](#production-hardening-recommendations)
+20. [Repository Structure Recommendation](#repository-structure-recommendation)
+21. [References](#references)
 
 ---
 
@@ -652,39 +653,19 @@ Runtime Fabric must be associated with at least one Anypoint environment before 
 
 ## Configure Runtime Fabric Ingress Template
 
-Create file:
+Runtime Fabric needs an ingress template so that Mule applications deployed to RTF can be exposed through the NGINX ingress controller.
 
-```bash
-vi rtf-nginx-ingress-template.yaml
+This repository provides a ready-to-use manifest here:
+
+```text
+manifests/ingress-resource.yaml
 ```
 
-Add the following content:
+The important value is:
 
 ```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: rtf-nginx-ingress-template
-  namespace: rtf
 spec:
   ingressClassName: rtf-nginx
-  rules:
-    - host: app-name.rtf.example.com
-      http:
-        paths:
-          - pathType: Prefix
-            path: /
-            backend:
-              service:
-                name: service-name
-                port:
-                  name: service-port
-```
-
-Apply:
-
-```bash
-kubectl apply -f rtf-nginx-ingress-template.yaml
 ```
 
 Important points:
@@ -692,6 +673,20 @@ Important points:
 - Runtime Fabric ingress templates use the `rtf-` prefix.
 - For NGINX, use `rtf-nginx` in the Runtime Fabric template.
 - The actual NGINX ingress controller uses `nginx` as the vendor-specific ingress class.
+- The placeholder service name and service port must remain as `service-name` and `service-port`; Runtime Fabric replaces these values when Mule applications are deployed.
+
+Apply the static manifest manually:
+
+```bash
+kubectl apply -f manifests/ingress-resource.yaml
+```
+
+Verify:
+
+```bash
+kubectl get ingress -n rtf
+kubectl describe ingress rtf-nginx-ingress-template -n rtf
+```
 
 For real deployment, replace:
 
@@ -705,6 +700,94 @@ Example DNS configuration:
 
 ```text
 *.rtf.example.com → NGINX LoadBalancer DNS name
+```
+
+---
+
+## Generate and Apply Ingress Template Using Script
+
+This repository also includes a script that generates the Runtime Fabric NGINX ingress template dynamically and applies it to the `rtf` namespace.
+
+Script path:
+
+```text
+scripts/apply-rtf-nginx-ingress-template.sh
+```
+
+Make the script executable:
+
+```bash
+chmod +x scripts/apply-rtf-nginx-ingress-template.sh
+```
+
+Generate and apply the ingress template using the default domain `rtf.example.com`:
+
+```bash
+./scripts/apply-rtf-nginx-ingress-template.sh
+```
+
+Generate and apply using your own domain:
+
+```bash
+export RTF_DOMAIN=rtf.muleaceacademy.com
+./scripts/apply-rtf-nginx-ingress-template.sh
+```
+
+Generate the YAML file only, without applying it to Kubernetes:
+
+```bash
+export RTF_DOMAIN=rtf.muleaceacademy.com
+export GENERATE_ONLY=true
+./scripts/apply-rtf-nginx-ingress-template.sh
+```
+
+Validate the generated manifest using Kubernetes server-side dry run:
+
+```bash
+export RTF_DOMAIN=rtf.muleaceacademy.com
+export DRY_RUN=true
+./scripts/apply-rtf-nginx-ingress-template.sh
+```
+
+Enable TLS after creating a TLS secret in the `rtf` namespace:
+
+```bash
+kubectl create secret tls rtf-wildcard-tls \
+  --cert=/path/to/tls.crt \
+  --key=/path/to/tls.key \
+  -n rtf
+
+export RTF_DOMAIN=rtf.muleaceacademy.com
+export ENABLE_TLS=true
+export TLS_SECRET_NAME=rtf-wildcard-tls
+./scripts/apply-rtf-nginx-ingress-template.sh
+```
+
+Supported script variables:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `RTF_NAMESPACE` | `rtf` | Runtime Fabric namespace |
+| `INGRESS_TEMPLATE_NAME` | `rtf-nginx-ingress-template` | Name of the ingress template |
+| `INGRESS_CLASS_NAME` | `rtf-nginx` | Runtime Fabric ingress class name |
+| `RTF_DOMAIN` | `rtf.example.com` | Base domain for Mule app endpoints |
+| `RTF_APP_HOST` | `app-name.${RTF_DOMAIN}` | Placeholder host in the template |
+| `MANIFEST_FILE` | `manifests/rtf-nginx-ingress-template.yaml` | Output YAML file path |
+| `ENABLE_TLS` | `false` | Adds TLS section and SSL redirect annotation |
+| `TLS_SECRET_NAME` | `rtf-wildcard-tls` | TLS secret name in the `rtf` namespace |
+| `GENERATE_ONLY` | `false` | Generates YAML without applying it |
+| `DRY_RUN` | `false` | Validates YAML without applying it |
+
+After applying the template, verify the NGINX LoadBalancer DNS name:
+
+```bash
+kubectl get svc ingress-nginx-controller -n ingress-nginx
+```
+
+Create a wildcard DNS record pointing to that LoadBalancer DNS name:
+
+```text
+*.rtf.muleaceacademy.com → <NGINX LoadBalancer DNS name>
 ```
 
 ---
@@ -1063,6 +1146,10 @@ rtfctl install "$ACTIVATION_DATA"
 kubectl get pods -n rtf
 rtfctl status
 
+# Generate and apply Runtime Fabric NGINX ingress template
+export RTF_DOMAIN=rtf.muleaceacademy.com
+./scripts/apply-rtf-nginx-ingress-template.sh
+
 # Apply Mule license
 rtfctl apply mule-license --file ~/Downloads/license.lic
 rtfctl get mule-license
@@ -1143,6 +1230,7 @@ Recommended repository structure:
 │   ├── create-eks-cluster.sh
 │   ├── install-nginx-ingress.sh
 │   ├── install-runtime-fabric.sh
+│   ├── apply-rtf-nginx-ingress-template.sh
 │   ├── apply-mule-license.sh
 │   └── uninstall-rtf-and-eks.sh
 ├── manifests
