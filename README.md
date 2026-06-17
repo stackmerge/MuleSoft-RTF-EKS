@@ -918,7 +918,7 @@ Runtime Manager → Runtime Fabrics → Select mulesoft-eks-rtf → Delete Runti
 ### 3. Uninstall Runtime Fabric from Kubernetes
 
 ```bash
-rtfctl uninstall
+rtfctl uninstall --confirm
 ```
 
 Check namespace:
