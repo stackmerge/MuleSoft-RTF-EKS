@@ -1,22 +1,44 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: rtf-ingress
+  name: rtf-nginx-ingress-template
   namespace: rtf
   annotations:
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/group.name: student<XX>
-    kubernetes.io/ingress.class: rtf-alb
+    # NGINX-specific annotations.
+    # Enable/disable these based on your requirement.
+
+    # Sends traffic to backend service using HTTP.
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+
+    # Optional: increase proxy timeout for long-running Mule APIs.
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+
+    # Optional: increase request body size if APIs accept large payloads.
+    nginx.ingress.kubernetes.io/proxy-body-size: "20m"
+
+    # Optional: force HTTPS when TLS is configured.
+    # Uncomment this only after TLS is enabled.
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+
 spec:
+  # IMPORTANT:
+  # Runtime Fabric uses the rtf- prefix to identify this object as an ingress template.
+  # The actual NGINX ingress controller uses the vendor-specific class name "nginx".
+  # Runtime Fabric consumes this template and creates real ingress resources for Mule apps.
+  ingressClassName: rtf-nginx
+
   rules:
-  - host: "*.mulesoft-training.com"
-    http:
-      paths:
-      - pathType: Prefix
-        path: "/*"
-        backend:
-          service:
-            name: app
-            port:
-              number: 80
+    - host: "*.rtf.muleaceacademy.com"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                # Placeholder value used by Runtime Fabric during app deployment.
+                name: service-name
+                port:
+                  # Placeholder value used by Runtime Fabric during app deployment.
+                  name: service-port
