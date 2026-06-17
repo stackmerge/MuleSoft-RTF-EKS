@@ -1,0 +1,13 @@
+# Secrets
+.env
+*.lic
+activation-data.txt
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Local kube config backups
+kubeconfig*
