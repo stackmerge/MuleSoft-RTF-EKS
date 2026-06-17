@@ -1,34 +1,59 @@
-# -----------------------------------------------------------------------------
-# rtf-nginx-ingress-template.yaml
-# -----------------------------------------------------------------------------
-# Runtime Fabric custom ingress template for NGINX Ingress Controller.
-#
-# Important:
-# - This object is a TEMPLATE consumed by Runtime Fabric.
-# - Do not change the placeholder service name/port values unless required by
-#   MuleSoft documentation for your RTF version.
-# - Update the host value to match your DNS strategy.
-# - Runtime Fabric ingress templates use an ingressClassName with the rtf- prefix.
-# -----------------------------------------------------------------------------
+# rtf-alb-and-ingress.yaml
+---
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: IngressClassParams
+metadata:
+  name: rtf-alb-params
+spec:
+  scheme: internet-facing
+  ipAddressType: ipv4
+  # Optional: set targetType: ip or instance if needed (ip is typical for EKS + pods)
+  targetType: ip
+  # Optional tags example:
+  # tags:
+  #   - key: env
+  #     value: nonprod
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: rtf-alb
+  # optional annotation to mark default:
+  # annotations:
+  #   ingressclass.kubernetes.io/is-default-class: "true"
+spec:
+  controller: ingress.k8s.aws/alb
+  parameters:
+    apiGroup: elbv2.k8s.aws
+    kind: IngressClassParams
+    name: rtf-alb-params
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: rtf-nginx-ingress-template
+  name: rtf-ingress
   namespace: rtf
+  labels:
+    business-group: business-group-id
+    environment: environment-id
   annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/certificate-arn: "paste ur certificate-arn"
+    alb.ingress.kubernetes.io/group.name: <add group name here>
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/ssl-policy: "ELBSecurityPolicy-2016-08"
 spec:
-  ingressClassName: rtf-nginx
+  ingressClassName: rtf-alb
   rules:
-    - host: app-name.rtf.example.com
+    - host: "*.abc.com"
       http:
         paths:
           - pathType: Prefix
-            path: /
+            path: /app-name
             backend:
               service:
                 name: service-name
                 port:
-                  name: service-port
+                  number: 80
