@@ -66,7 +66,6 @@ main() {
   eksctl create cluster \
     --name "${CLUSTER_NAME}" \
     --region "${AWS_REGION}" \
-    "${version_args[@]}" \
     --nodegroup-name "${NODEGROUP_NAME}" \
     --node-type "${NODE_TYPE}" \
     --nodes "${NODES}" \
